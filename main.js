@@ -83,7 +83,7 @@
   function check(args,context) {
     var caps=tide.capabilities||[];
     if(caps.indexOf('chat.send')<0||caps.indexOf('media.download')<0)throw new Error('宿主缺少chat.send或media.download能力');
-    if(!context||!context.chat||!context.media)throw new Error('缺少当前聊天或媒体上下文');
+    if(!context||!context.chat||!context.media||typeof context.chat.getStatus!=="function"||typeof context.chat.sendImage!=="function"||typeof context.media.download!=="function"||typeof context.media.release!=="function")throw new Error('缺少当前聊天或媒体上下文');
     if(typeof args.requestId!=='string'||!args.requestId.trim()||args.requestId.length>128)throw new Error('requestId必须为1～128字符的非空标识');
   }
   async function send(args,context) {
