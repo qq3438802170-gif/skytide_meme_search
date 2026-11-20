@@ -1,8 +1,8 @@
 {
   "apiVersion": 1,
-  "id": "tidebot_meme_search",
+  "id": "skytide_meme_search",
   "name": "表情包联网搜索",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "从表情站搜索并发送表情包图片，免费免密钥搜索",
   "author": "yutan123",
   "entry": "main.js",

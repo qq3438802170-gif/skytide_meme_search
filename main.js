@@ -1,8 +1,17 @@
-/* TideBot SDK v1: dedicated meme search, no key or configuration. */
 (function () {
   'use strict';
-  var cache = Object.create(null), keys = [];
-  var origin = 'https://www.dogetu.com';
+  var ORIGIN = 'https://www.dogetu.com';
+  var DEFAULT_LIMIT = 6;
+  var MAX_RESULTS = 10;
+  var CACHE_TTL_MS = 180000;
+  var CACHE_CAPACITY = 12;
+  var cache = Object.create(null);
+  var keys = [];
+
+  function errorText(error) {
+    return String(error && error.message || error).slice(0, 600);
+  }
+
   function decode(value) {
     return String(value || '').replace(/&(#x[0-9a-f]+|#\d+|quot|amp|apos|lt|gt);/gi, function (all, key) {
       if (key.charAt(0) !== '#') return {quot:'"',amp:'&',apos:"'",lt:'<',gt:'>'}[key.toLowerCase()] || all;
@@ -38,7 +47,7 @@
         score:title.indexOf(keyword) >= 0 ? 2 : 0});
     }
     result.sort(function(a,b){return b.score-a.score;});
-    return result.slice(0,10).map(function(item,index){delete item.score;item.id=index+1;return item;});
+    return result.slice(0, MAX_RESULTS).map(function(item,index){delete item.score;item.id=index+1;return item;});
   }
   function keywordOf(args) {
     var value = text(args.keyword);
@@ -47,23 +56,23 @@
     if (!value) throw new Error('请提供具体情绪或角色，不要只输入表情包');
     return value;
   }
-  function hit(keyword) { var item=cache[keyword];return item && Date.now()-item.at<180000 ? item.items : null; }
+  function hit(keyword) { var item=cache[keyword];return item && Date.now()-item.at<CACHE_TTL_MS ? item.items : null; }
   function remember(keyword, items) {
     cache[keyword]={at:Date.now(),items:items};keys=keys.filter(function(k){return k!==keyword;});keys.push(keyword);
-    if(keys.length>12)delete cache[keys.shift()];
+    if(keys.length>CACHE_CAPACITY)delete cache[keys.shift()];
   }
   function fail(stage,error,uncertain) {
-    return {sent:false,status:uncertain?'delivery_unconfirmed':'failed',stage:stage,error:String(error && error.message || error).slice(0,600),
+    return {sent:false,status:uncertain?'delivery_unconfirmed':'failed',stage:stage,error:errorText(error),
       retry_same_request_id:true,instruction:uncertain?'发送结果未确认，复用原requestId调用send_meme查询并重试，不要更换标识。':'未发送。请如实说明错误，不要声称发送成功；不要反复自动重试。'};
   }
   async function search(args) {
-    var keyword=keywordOf(args),limit=args.limit===undefined?6:args.limit;
-    if(typeof limit!=='number'||limit%1||limit<1||limit>10)throw new Error('limit必须为1～10的整数');
+    var keyword=keywordOf(args),limit=args.limit===undefined?DEFAULT_LIMIT:args.limit;
+    if(typeof limit!=='number'||limit%1||limit<1||limit>MAX_RESULTS)throw new Error('limit必须为1～10的整数');
     var items=hit(keyword),cached=!!items;
     if(!items) {
       var response;
-      try { response=await tide.request({url:origin+'/search.html?keyword='+encodeURIComponent(keyword),headers:{'User-Agent':'Mozilla/5.0','Accept':'text/html','Accept-Language':'zh-CN,zh;q=0.9'}}); }
-      catch(error) { return {keyword:keyword,status:'unavailable',count:0,candidates:[],sent:false,error:String(error && error.message || error).slice(0,600)}; }
+      try { response=await tide.request({url:ORIGIN+'/search.html?keyword='+encodeURIComponent(keyword),headers:{'User-Agent':'Mozilla/5.0','Accept':'text/html','Accept-Language':'zh-CN,zh;q=0.9'}}); }
+      catch(error) { return {keyword:keyword,status:'unavailable',count:0,candidates:[],sent:false,error:errorText(error)}; }
       if(response.status!==200)return {keyword:keyword,status:'unavailable',count:0,candidates:[],sent:false,error:'HTTP '+response.status};
       items=parse(String(response.body||''),keyword);
       if(items.length)remember(keyword,items);
@@ -99,7 +108,7 @@
     try {check(args,context);keyword=keywordOf(args);}catch(error){return fail('validate',error,false);}
     var items=hit(keyword);
     if(items && items.length)return await send({url:items[0].send_url,requestId:args.requestId},context);
-    var result=await search({keyword:keyword,limit:6});
+    var result=await search({keyword:keyword,limit:DEFAULT_LIMIT});
     if(!result.candidates.length)return result;
     return {sent:false,status:'ready_to_send',selected:result.candidates[0],next_tool:'send_meme',
       next_arguments:{url:result.candidates[0].send_url,requestId:args.requestId},
